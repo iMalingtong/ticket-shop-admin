@@ -1,0 +1,5 @@
+# Integration tests provide random-port isolated MySQL/Redis connection properties.
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 2

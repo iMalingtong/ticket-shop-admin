@@ -1,0 +1,3 @@
+# No production endpoint or credential defaults. Deployment must supply them.
+server:
+  address: ${TICKET_SHOP_BIND_ADDRESS}

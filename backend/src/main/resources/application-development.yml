@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    url: ${TICKET_SHOP_DB_URL:jdbc:mysql://127.0.0.1:3306/ticket_shop_admin?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8}
+  data:
+    redis:
+      host: ${TICKET_SHOP_REDIS_HOST:127.0.0.1}
+      port: ${TICKET_SHOP_REDIS_PORT:6379}

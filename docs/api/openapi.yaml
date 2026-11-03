@@ -1,0 +1,4680 @@
+openapi: 3.0.3
+info:
+  title: 票小理账号授权与管理API
+  version: 1.0.0
+  description: P2设计契约；路径尚未开放。所有数据为账号授权数据，不接收票据/附件。成功和错误均含服务器requestId/serverNow；所有响应no-store。JSON请求≤32KiB；拒绝未知字段。无refresh、自助注册、删除或导出接口。
+  license:
+    name: Private project API contract
+servers:
+- url: http://127.0.0.1:18080
+  description: 仅本机开发；生产必须HTTPS同源管理后台
+tags:
+- name: client
+  description: 桌面Java侧Bearer身份
+- name: admin-auth
+  description: 管理Cookie、内存CSRF与Origin
+- name: management
+  description: 逐条服务器权限；写请求CSRF＋幂等键＋版本
+paths:
+  /api/v1/client/login:
+    post:
+      operationId: clientLogin
+      tags:
+      - client
+      summary: 桌面登录
+      description: 无注册/refresh接口；不自动重试。NORMAL结果包含资格；CHANGE_PASSWORD不授予工作资格。密码正确之后才披露资格拒绝原因。
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: &id001
+              schema:
+                type: string
+                enum:
+                - no-store
+              description: 所有业务响应禁止缓存。
+            X-Request-Id: &id002
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 64
+              description: 服务端生成，与响应体一致。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientLoginResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions: []
+      x-purpose: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientLoginRequest'
+  /api/v1/client/first-password:
+    post:
+      operationId: clientFirstPassword
+      tags:
+      - client
+      summary: 桌面首次改密
+      description: 仅PASSWORD_CHANGE用途；同事务消费受限凭据、改密并撤销全部旧会话，必须重新登录。
+      security:
+      - ClientBearer: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientFirstPasswordResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - client:self
+      x-purpose:
+      - PASSWORD_CHANGE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirstPasswordRequest'
+  /api/v1/client/validate:
+    post:
+      operationId: clientValidate
+      tags:
+      - client
+      summary: 联网资格校验
+      description: 更新lastValidatedAt；数据库与Redis任一不可用503；不得滑动绝对到期时间。
+      security:
+      - ClientBearer: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientValidateResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - client:self
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+  /api/v1/client/account:
+    get:
+      operationId: clientAccount
+      tags:
+      - client
+      summary: 本人资料与资格
+      description: 检查资格但不更新lastValidatedAt；不能用于心跳续窗口。
+      security:
+      - ClientBearer: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientAccountResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - client:self
+      x-purpose:
+      - NORMAL
+  /api/v1/client/password:
+    post:
+      operationId: clientPassword
+      tags:
+      - client
+      summary: 桌面用户改密
+      description: 桌面用户改密
+      security:
+      - ClientBearer: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPasswordResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - client:self
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRequest'
+  /api/v1/client/logout:
+    post:
+      operationId: clientLogout
+      tags:
+      - client
+      summary: 桌面退出
+      description: 只处理本身份域已验证的JWT；已撤销或过期凭据重复退出成功；不披露账号信息。断网本地清理不代表服务端已撤销。
+      security:
+      - ClientBearer: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientLogoutResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - client:self
+      x-purpose:
+      - NORMAL
+      - PASSWORD_CHANGE
+  /api/v1/admin/auth/csrf:
+    get:
+      operationId: adminCsrf
+      tags:
+      - admin-auth
+      summary: 获取或轮换CSRF
+      description: 无会话时创建最长10分钟预认证Cookie；已有有效管理Cookie时绑定并轮换该会话CSRF。限允许Origin与频率。原值只进入前端内存，不回显旧值。 GET可无Origin：须校验同源Sec-Fetch-Site/Referer；若携带Origin必须严格匹配，不要求脚本设置浏览器禁用头。
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+            Set-Cookie:
+              schema:
+                type: string
+              description: host-only HttpOnly；生产Secure；SameSite=Strict；Path=/api/v1/admin。JWT仅Cookie承载；不返回脚本。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCsrfResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions: []
+      x-purpose: []
+  /api/v1/admin/auth/login:
+    post:
+      operationId: adminLogin
+      tags:
+      - admin-auth
+      summary: 管理员登录
+      description: 预认证Cookie＋CSRF＋允许Origin；消费预认证，成功轮换管理Cookie和CSRF。脚本不接收JWT；首次改密仅受限会话。
+      security:
+      - PreAuthCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+            Set-Cookie:
+              schema:
+                type: string
+              description: host-only HttpOnly；生产Secure；SameSite=Strict；Path=/api/v1/admin。JWT仅Cookie承载；不返回脚本。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLoginResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions: []
+      x-purpose: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+  /api/v1/admin/auth/first-password:
+    post:
+      operationId: adminFirstPassword
+      tags:
+      - admin-auth
+      summary: 管理员首次改密
+      description: 管理员首次改密
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+            Set-Cookie:
+              schema:
+                type: string
+              description: host-only HttpOnly；生产Secure；SameSite=Strict；Path=/api/v1/admin。JWT仅Cookie承载；不返回脚本。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminFirstPasswordResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:self
+      x-purpose:
+      - PASSWORD_CHANGE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirstPasswordRequest'
+  /api/v1/admin/auth/me:
+    get:
+      operationId: adminMe
+      tags:
+      - admin-auth
+      summary: 当前管理员摘要与权限
+      description: 刷新后由服务端重取身份；不续空闲。PASSWORD_CHANGE凭据拒绝。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMeResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:self
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/auth/activity:
+    post:
+      operationId: adminActivity
+      tags:
+      - admin-auth
+      summary: 管理员真实活动
+      description: 真实键鼠活动至多每分钟上报一次；轮询不得调用；更新空闲但不突破原8h。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminActivityResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:self
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/auth/password:
+    post:
+      operationId: adminPassword
+      tags:
+      - admin-auth
+      summary: 管理员本人改密
+      description: 管理员本人改密
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+            Set-Cookie:
+              schema:
+                type: string
+              description: host-only HttpOnly；生产Secure；SameSite=Strict；Path=/api/v1/admin。JWT仅Cookie承载；不返回脚本。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPasswordResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:self
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRequest'
+  /api/v1/admin/auth/logout:
+    post:
+      operationId: adminLogout
+      tags:
+      - admin-auth
+      summary: 管理员退出
+      description: Cookie＋CSRF；重复撤销幂等，清理Cookie与CSRF；不得自动重试。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+            Set-Cookie:
+              schema:
+                type: string
+              description: host-only HttpOnly；生产Secure；SameSite=Strict；Path=/api/v1/admin。JWT仅Cookie承载；不返回脚本。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLogoutResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:self
+      x-purpose:
+      - NORMAL
+      - PASSWORD_CHANGE
+  /api/v1/admin/overview:
+    get:
+      operationId: overview
+      tags:
+      - management
+      summary: 概览统计
+      description: 概览统计
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - dashboard:read
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/users:
+    get:
+      operationId: listCustomers
+      tags:
+      - management
+      summary: 查询客户
+      description: 全结果过滤排序后分页；id同向稳定次序；lastLoginAt为空始终排最后；范围[from,to)。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 0
+          maxLength: 64
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/CustomerStatus'
+      - name: termStatus
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/TermStatus'
+      - name: validUntilFrom
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UtcInstant'
+        description: 包含下界
+      - name: validUntilTo
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UtcInstant'
+        description: 不包含上界
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - createdAt:asc
+          - createdAt:desc
+          - validUntil:asc
+          - validUntil:desc
+          - lastLoginAt:asc
+          - lastLoginAt:desc
+          default: createdAt:desc
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListCustomersResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:read
+      x-purpose:
+      - NORMAL
+    post:
+      operationId: createCustomer
+      tags:
+      - management
+      summary: 创建客户
+      description: 创建客户
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '201':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:create
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+  /api/v1/admin/users/{id}:
+    get:
+      operationId: getCustomer
+      tags:
+      - management
+      summary: 客户详情
+      description: 客户详情
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:read
+      x-purpose:
+      - NORMAL
+    patch:
+      operationId: updateCustomer
+      tags:
+      - management
+      summary: 修改客户基本资料
+      description: 修改客户基本资料
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:update
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequest'
+  /api/v1/admin/users/{id}/freeze:
+    post:
+      operationId: freezeCustomer
+      tags:
+      - management
+      summary: 冻结客户
+      description: 必须满足状态转换和expectedVersion；相同状态仍检查版本。冻结/停用撤销会话；启用/解冻不延期、不复活旧会话。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreezeCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:state
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonVersion'
+  /api/v1/admin/users/{id}/unfreeze:
+    post:
+      operationId: unfreezeCustomer
+      tags:
+      - management
+      summary: 解冻客户
+      description: 必须满足状态转换和expectedVersion；相同状态仍检查版本。冻结/停用撤销会话；启用/解冻不延期、不复活旧会话。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnfreezeCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:state
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersion'
+  /api/v1/admin/users/{id}/disable:
+    post:
+      operationId: disableCustomer
+      tags:
+      - management
+      summary: 停用客户
+      description: 必须满足状态转换和expectedVersion；相同状态仍检查版本。冻结/停用撤销会话；启用/解冻不延期、不复活旧会话。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisableCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:state
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonVersion'
+  /api/v1/admin/users/{id}/enable:
+    post:
+      operationId: enableCustomer
+      tags:
+      - management
+      summary: 启用客户
+      description: 必须满足状态转换和expectedVersion；相同状态仍检查版本。冻结/停用撤销会话；启用/解冻不延期、不复活旧会话。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnableCustomerResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:state
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersion'
+  /api/v1/admin/users/{id}/validity:
+    put:
+      operationId: updateCustomerValidity
+      tags:
+      - management
+      summary: 修改使用期限
+      description: 修改使用期限
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCustomerValidityResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:validity
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidityRequest'
+  /api/v1/admin/users/{id}/reset-password:
+    post:
+      operationId: resetCustomerPassword
+      tags:
+      - management
+      summary: 重置客户密码
+      description: 重置客户密码
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetCustomerPasswordResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer:password-reset
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+  /api/v1/admin/sessions:
+    get:
+      operationId: listCustomerSessions
+      tags:
+      - management
+      summary: 查询客户会话
+      description: 状态优先已撤销、已过期、有效；近期在线另算，不输出sid/jti/token_hash。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: userId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Id'
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - VALID
+          - EXPIRED
+          - REVOKED
+      - name: recentOnline
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - authenticatedAt:asc
+          - authenticatedAt:desc
+          default: authenticatedAt:desc
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListCustomerSessionsResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-session:read
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/sessions/{id}/revoke:
+    post:
+      operationId: revokeCustomerSession
+      tags:
+      - management
+      summary: 撤销单个客户会话
+      description: expectedVersion为目标账号版本；已撤销会话不重复副作用，仍遵守版本与幂等契约；不把缓存失败当数据库回滚。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeCustomerSessionResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-session:revoke
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonVersion'
+  /api/v1/admin/users/{id}/revoke-sessions:
+    post:
+      operationId: revokeCustomerSessions
+      tags:
+      - management
+      summary: 撤销客户全部会话
+      description: 撤销客户全部会话
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeCustomerSessionsResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-session:revoke
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonVersion'
+  /api/v1/admin/users/{id}/audit-events:
+    get:
+      operationId: customerAuditEvents
+      tags:
+      - management
+      summary: 客户操作审计
+      description: 客户操作审计
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAuditEventsResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-audit:read
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/audit-events:
+    get:
+      operationId: listAuditEvents
+      tags:
+      - management
+      summary: 管理审计
+      description: from包含/to排他，时间倒序＋id稳定。运营仅客户审计；管理员、策略、平台审计仅超管；权限按记录域逐条限定，不能只检查菜单。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: actorId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Id'
+      - name: targetType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - CUSTOMER_SESSION
+          - ADMINISTRATOR
+          - POLICY
+          - LOGIN_THROTTLE
+          - PLATFORM
+      - name: targetId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Id'
+      - name: action
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+      - name: result
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+      - name: from
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UtcInstant'
+      - name: to
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UtcInstant'
+      - name: requestId
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAuditEventsResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-audit:read
+      - admin-audit:read
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/login-events:
+    get:
+      operationId: listLoginEvents
+      tags:
+      - management
+      summary: 登录安全日志
+      description: 运营仅CUSTOMER域（缺省也只限客户）；请求ADMIN域403，不静默扩大；超管可见两域。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: identityType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - ADMIN
+      - name: accountId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Id'
+      - name: result
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+          - THROTTLED
+      - name: eventType
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+      - name: from
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UtcInstant'
+      - name: to
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/UtcInstant'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListLoginEventsResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-security:read
+      - admin-security:read
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/login-throttles:
+    get:
+      operationId: listLoginThrottles
+      tags:
+      - management
+      summary: 登录限流记录
+      description: 运营仅CUSTOMER域；标识屏蔽，禁止输出HMAC摘要和原始来源IP。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: realm
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - ADMIN
+      - name: blocked
+        in: query
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListLoginThrottlesResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-security:read
+      - admin-security:read
+      x-purpose:
+      - NORMAL
+  /api/v1/admin/login-throttles/{id}/release:
+    post:
+      operationId: releaseLoginThrottle
+      tags:
+      - management
+      summary: 解除临时限流
+      description: 按记录域授权；运营仅CUSTOMER；解除选中维度并审计，不解冻账号。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseLoginThrottleResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - customer-security:unlock
+      - admin-security:unlock
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonVersion'
+  /api/v1/admin/administrators:
+    get:
+      operationId: listAdministrators
+      tags:
+      - management
+      summary: 管理员列表
+      description: 管理员列表
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAdministratorsResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:read
+      x-purpose:
+      - NORMAL
+    post:
+      operationId: createAdministrator
+      tags:
+      - management
+      summary: 创建运营管理员
+      description: 创建运营管理员
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '201':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAdministratorResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:create
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdministratorRequest'
+  /api/v1/admin/administrators/{id}:
+    patch:
+      operationId: updateAdministrator
+      tags:
+      - management
+      summary: 修改管理员显示名
+      description: 修改管理员显示名
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateAdministratorResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:update
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdministratorRequest'
+  /api/v1/admin/administrators/{id}/disable:
+    post:
+      operationId: disableAdministrator
+      tags:
+      - management
+      summary: 停用管理员
+      description: 仅超管；锁platform_control，保护最后一名有效超管；停用撤销所有会话。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisableAdministratorResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:state
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonVersion'
+  /api/v1/admin/administrators/{id}/enable:
+    post:
+      operationId: enableAdministrator
+      tags:
+      - management
+      summary: 启用管理员
+      description: 仅超管；锁platform_control，保护最后一名有效超管；停用撤销所有会话。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnableAdministratorResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:state
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersion'
+  /api/v1/admin/administrators/{id}/reset-password:
+    post:
+      operationId: resetAdministratorPassword
+      tags:
+      - management
+      summary: 重置管理员密码
+      description: 重置管理员密码
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetAdministratorPasswordResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - admin:password-reset
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+  /api/v1/admin/policy:
+    get:
+      operationId: getPolicy
+      tags:
+      - management
+      summary: 读取登录策略
+      description: 读取登录策略
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      responses:
+        '200':
+          description: 成功，只读请求不延长管理员空闲期限。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPolicyResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - policy:read
+      x-purpose:
+      - NORMAL
+    put:
+      operationId: updatePolicy
+      tags:
+      - management
+      summary: 修改登录策略
+      description: 仅超管；缩短同事务截短旧NORMAL客户会话，放宽不延长旧会话；返回影响数。
+      security:
+      - AdminCookie: []
+      parameters:
+      - $ref: '#/components/parameters/Correlation'
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/Idempotency'
+      responses:
+        '200':
+          description: 业务提交成功；PENDING为数据库已提交、Redis待同步。
+          headers:
+            Cache-Control: *id001
+            X-Request-Id: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatePolicyResponse'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          $ref: '#/components/responses/403'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          $ref: '#/components/responses/409'
+        '426':
+          $ref: '#/components/responses/426'
+        '429':
+          $ref: '#/components/responses/429'
+        '503':
+          $ref: '#/components/responses/503'
+      x-permissions:
+      - policy:update
+      x-purpose:
+      - NORMAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicyRequest'
+components:
+  securitySchemes:
+    ClientBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256；client audience、CUSTOMER principalType；仅Java侧持有。
+    AdminCookie:
+      type: apiKey
+      in: cookie
+      name: tsa_admin_session
+      description: HttpOnly JWT；admin audience、ADMIN principalType；CSRF绑定，脚本不可读。
+    PreAuthCookie:
+      type: apiKey
+      in: cookie
+      name: tsa_admin_pre_auth
+      description: 随机预认证绑定；非JWT，最长10分钟，登录消费。
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    Csrf:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 43
+        maxLength: 43
+      description: 内存CSRF值；不得记录。
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uri
+      description: 必须匹配配置的后台同源Origin；不得信任任意来源。
+    Idempotency:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID；按管理员和键唯一保留24小时；不得自动重试写入。
+    Correlation:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+        pattern: ^[A-Za-z0-9._-]+$
+      description: 可选关联输入，服务端仍生成自己的requestId。
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        enum:
+        - 10
+        - 20
+        - 50
+        - 100
+        default: 20
+  responses:
+    '400':
+      description: VALIDATION_ERROR; PROTOCOL_INVALID
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error400'
+    '401':
+      description: INVALID_CREDENTIALS; SESSION_EXPIRED; SESSION_REVOKED; PASSWORD_CHANGE_TOKEN_INVALID; SESSION_INVALID
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error401'
+    '403':
+      description: ACCOUNT_FROZEN; ACCOUNT_DISABLED; ACCOUNT_NOT_STARTED; ACCOUNT_EXPIRED; PASSWORD_CHANGE_REQUIRED; FORBIDDEN;
+        CSRF_INVALID
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error403'
+    '404':
+      description: RESOURCE_NOT_FOUND
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error404'
+    '409':
+      description: VERSION_CONFLICT; USERNAME_EXISTS; INVALID_STATE_TRANSITION; LAST_SUPER_ADMIN; IDEMPOTENCY_CONFLICT
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error409'
+    '426':
+      description: CLIENT_UPDATE_REQUIRED; PROTOCOL_UNSUPPORTED
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error426'
+    '429':
+      description: LOGIN_RATE_LIMITED
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          description: 下次允许尝试的秒数。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error429'
+    '503':
+      description: SERVICE_UNAVAILABLE; MAINTENANCE
+      headers:
+        Cache-Control: *id001
+        X-Request-Id: *id002
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error503'
+  schemas:
+    Id:
+      type: string
+      minLength: 1
+      maxLength: 19
+      pattern: ^[1-9][0-9]{0,18}$
+      description: 正十进制ID字符串；不超过9223372036854775807，不得转为JS number。
+      example: '9007199254740993'
+    Version:
+      type: string
+      minLength: 1
+      maxLength: 19
+      pattern: ^(0|[1-9][0-9]{0,18})$
+      description: 非负并发版本字符串；不超过9223372036854775807。
+      example: '0'
+    UtcInstant:
+      type: string
+      format: date-time
+      pattern: ^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$
+      description: UTC ISO8601，最多6位小数，必须Z结尾；到期为排他上界。 MySQL DATETIME范围1000–9999年。
+      example: '2026-11-03T00:00:00Z'
+    Username:
+      type: string
+      minLength: 3
+      maxLength: 64
+      pattern: ^[A-Za-z0-9._-]{3,64}$
+      description: 提交前trim；服务端Locale.ROOT小写唯一键，显示保留大小写。
+    Password:
+      type: string
+      minLength: 12
+      maxLength: 128
+      format: password
+      writeOnly: true
+      description: 12–128 Unicode码点；不trim、不截断，不回显或记录。
+    Reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+    CustomerStatus:
+      type: string
+      enum:
+      - ACTIVE
+      - FROZEN
+      - DISABLED
+    TermStatus:
+      type: string
+      enum:
+      - NOT_STARTED
+      - IN_TERM
+      - EXPIRED
+    Purpose:
+      type: string
+      enum:
+      - NORMAL
+      - PASSWORD_CHANGE
+    AdminRole:
+      type: string
+      enum:
+      - SUPER_ADMIN
+      - OPERATOR
+    CacheSyncStatus:
+      type: string
+      enum:
+      - SYNCED
+      - PENDING
+    Permission:
+      type: string
+      enum:
+      - dashboard:read
+      - customer:read
+      - customer:create
+      - customer:update
+      - customer:state
+      - customer:validity
+      - customer:password-reset
+      - customer-session:read
+      - customer-session:revoke
+      - customer-audit:read
+      - customer-security:read
+      - customer-security:unlock
+      - admin:read
+      - admin:create
+      - admin:update
+      - admin:state
+      - admin:password-reset
+      - admin-audit:read
+      - admin-security:read
+      - admin-security:unlock
+      - policy:read
+      - policy:update
+    ErrorCode:
+      type: string
+      enum:
+      - VALIDATION_ERROR
+      - PROTOCOL_INVALID
+      - INVALID_CREDENTIALS
+      - SESSION_EXPIRED
+      - SESSION_REVOKED
+      - PASSWORD_CHANGE_TOKEN_INVALID
+      - ACCOUNT_FROZEN
+      - ACCOUNT_DISABLED
+      - ACCOUNT_NOT_STARTED
+      - ACCOUNT_EXPIRED
+      - PASSWORD_CHANGE_REQUIRED
+      - FORBIDDEN
+      - CSRF_INVALID
+      - RESOURCE_NOT_FOUND
+      - VERSION_CONFLICT
+      - USERNAME_EXISTS
+      - INVALID_STATE_TRANSITION
+      - LAST_SUPER_ADMIN
+      - IDEMPOTENCY_CONFLICT
+      - CLIENT_UPDATE_REQUIRED
+      - PROTOCOL_UNSUPPORTED
+      - LOGIN_RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - MAINTENANCE
+      - SESSION_INVALID
+    FieldError:
+      type: object
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          minLength: 1
+          maxLength: 64
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - field
+      - reason
+    ErrorDetails:
+      type: object
+      additionalProperties: false
+      properties:
+        denialReasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/DenialReason'
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+        validFrom:
+          $ref: '#/components/schemas/UtcInstant'
+        validUntil:
+          $ref: '#/components/schemas/UtcInstant'
+        currentVersion:
+          $ref: '#/components/schemas/Version'
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+        retryAfterSeconds:
+          type: integer
+          minimum: 0
+          maximum: 900
+        minimumProtocolVersion:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+      example:
+        error:
+          code: VERSION_CONFLICT
+          message: 资料已更新，请刷新后重试
+          details:
+            currentVersion: '2'
+        requestId: synthetic-request
+        serverNow: '2026-11-03T00:00:00Z'
+    AccountSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+      required:
+      - id
+      - username
+      - displayName
+      - status
+    Qualification:
+      type: object
+      additionalProperties: false
+      properties:
+        qualified:
+          type: boolean
+          enum:
+          - true
+        account:
+          $ref: '#/components/schemas/AccountSummary'
+        validFrom:
+          $ref: '#/components/schemas/UtcInstant'
+        validUntil:
+          $ref: '#/components/schemas/UtcInstant'
+        authenticatedAt:
+          $ref: '#/components/schemas/UtcInstant'
+        expiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+        nextValidationAfterSeconds:
+          type: integer
+          enum:
+          - 300
+        networkWindowSeconds:
+          type: integer
+          enum:
+          - 600
+        policyVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - qualified
+      - account
+      - validFrom
+      - validUntil
+      - authenticatedAt
+      - expiresAt
+      - nextValidationAfterSeconds
+      - networkWindowSeconds
+      - policyVersion
+      example:
+        qualified: true
+        account:
+          id: '9007199254740993'
+          username: synthetic-user
+          displayName: 合成账号
+          status: ACTIVE
+        validFrom: '2026-11-03T00:00:00Z'
+        validUntil: '2026-12-03T00:00:00Z'
+        authenticatedAt: '2026-11-03T00:00:00Z'
+        expiresAt: '2026-11-04T00:00:00Z'
+        nextValidationAfterSeconds: 300
+        networkWindowSeconds: 600
+        policyVersion: '0'
+    ClientLoginRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        username:
+          $ref: '#/components/schemas/Username'
+        password:
+          $ref: '#/components/schemas/Password'
+        deviceName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        os:
+          type: string
+          enum:
+          - MACOS
+          - WINDOWS
+        clientVersion:
+          type: string
+          minLength: 1
+          maxLength: 40
+        protocolVersion:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+      required:
+      - username
+      - password
+      - os
+      - clientVersion
+      - protocolVersion
+    ClientNormalLogin:
+      type: object
+      additionalProperties: false
+      properties:
+        nextAction:
+          type: string
+          enum:
+          - NONE
+        token:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: 仅本次登录响应返回JWT；Java侧保存，禁止写入页面或日志。
+        qualification:
+          $ref: '#/components/schemas/Qualification'
+      required:
+      - nextAction
+      - token
+      - qualification
+    ClientPasswordChangeLogin:
+      type: object
+      additionalProperties: false
+      properties:
+        nextAction:
+          type: string
+          enum:
+          - CHANGE_PASSWORD
+        token:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: 仅用于首次改密及退出。 最长10分钟。
+        changeExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - nextAction
+      - token
+      - changeExpiresAt
+    ClientLoginResult:
+      oneOf:
+      - $ref: '#/components/schemas/ClientNormalLogin'
+      - $ref: '#/components/schemas/ClientPasswordChangeLogin'
+      discriminator:
+        propertyName: nextAction
+        mapping:
+          NONE: '#/components/schemas/ClientNormalLogin'
+          CHANGE_PASSWORD: '#/components/schemas/ClientPasswordChangeLogin'
+    FirstPasswordRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        newPassword:
+          $ref: '#/components/schemas/Password'
+      required:
+      - newPassword
+    PasswordRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        currentPassword:
+          $ref: '#/components/schemas/Password'
+        newPassword:
+          $ref: '#/components/schemas/Password'
+      required:
+      - currentPassword
+      - newPassword
+    ValidateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        clientVersion:
+          type: string
+          minLength: 1
+          maxLength: 40
+        protocolVersion:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+      required:
+      - clientVersion
+      - protocolVersion
+    LoginNext:
+      type: object
+      additionalProperties: false
+      properties:
+        nextAction:
+          type: string
+          enum:
+          - LOGIN
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - nextAction
+      - cacheSyncStatus
+    LogoutResult:
+      type: object
+      additionalProperties: false
+      properties:
+        revoked:
+          type: boolean
+          enum:
+          - true
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - revoked
+      - cacheSyncStatus
+    CsrfToken:
+      type: object
+      additionalProperties: false
+      properties:
+        csrfToken:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: 仅内存保存，以X-CSRF-Token请求头提交；获取即轮换，不读取Cookie中的JWT。
+        expiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - csrfToken
+      - expiresAt
+    AdminSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        role:
+          $ref: '#/components/schemas/AdminRole'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        sessionExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+        idleExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - id
+      - username
+      - displayName
+      - role
+      - permissions
+      - sessionExpiresAt
+      - idleExpiresAt
+    AdminLoginRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        username:
+          $ref: '#/components/schemas/Username'
+        password:
+          $ref: '#/components/schemas/Password'
+      required:
+      - username
+      - password
+    AdminNormalLogin:
+      type: object
+      additionalProperties: false
+      properties:
+        nextAction:
+          type: string
+          enum:
+          - NONE
+        administrator:
+          $ref: '#/components/schemas/AdminSummary'
+        csrfToken:
+          type: string
+          minLength: 43
+          maxLength: 43
+      required:
+      - nextAction
+      - administrator
+      - csrfToken
+    AdminPasswordChangeLogin:
+      type: object
+      additionalProperties: false
+      properties:
+        nextAction:
+          type: string
+          enum:
+          - CHANGE_PASSWORD
+        changeExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+        csrfToken:
+          type: string
+          minLength: 43
+          maxLength: 43
+      required:
+      - nextAction
+      - changeExpiresAt
+      - csrfToken
+    AdminLoginResult:
+      oneOf:
+      - $ref: '#/components/schemas/AdminNormalLogin'
+      - $ref: '#/components/schemas/AdminPasswordChangeLogin'
+      discriminator:
+        propertyName: nextAction
+        mapping:
+          NONE: '#/components/schemas/AdminNormalLogin'
+          CHANGE_PASSWORD: '#/components/schemas/AdminPasswordChangeLogin'
+    ActivityResult:
+      type: object
+      additionalProperties: false
+      properties:
+        sessionExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+        idleExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - sessionExpiresAt
+      - idleExpiresAt
+    Customer:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+        termStatus:
+          $ref: '#/components/schemas/TermStatus'
+        validFrom:
+          $ref: '#/components/schemas/UtcInstant'
+        validUntil:
+          $ref: '#/components/schemas/UtcInstant'
+        mustChangePassword:
+          type: boolean
+        remark:
+          type: string
+          minLength: 0
+          maxLength: 1000
+          nullable: true
+        lastLoginAt:
+          type: string
+          format: date-time
+          pattern: Z$
+          nullable: true
+        lastValidatedAt:
+          type: string
+          format: date-time
+          pattern: Z$
+          nullable: true
+        version:
+          $ref: '#/components/schemas/Version'
+        createdAt:
+          $ref: '#/components/schemas/UtcInstant'
+        updatedAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - id
+      - username
+      - displayName
+      - status
+      - termStatus
+      - validFrom
+      - validUntil
+      - mustChangePassword
+      - remark
+      - lastLoginAt
+      - lastValidatedAt
+      - version
+      - createdAt
+      - updatedAt
+    CustomerDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/Customer'
+        denialReasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/DenialReason'
+        activeSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+      - user
+      - denialReasons
+      - activeSessionCount
+    CreateCustomerRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        validFrom:
+          $ref: '#/components/schemas/UtcInstant'
+        validUntil:
+          $ref: '#/components/schemas/UtcInstant'
+        temporaryPassword:
+          $ref: '#/components/schemas/Password'
+        remark:
+          type: string
+          minLength: 0
+          maxLength: 1000
+          nullable: true
+      required:
+      - username
+      - displayName
+      - validFrom
+      - validUntil
+    UpdateCustomerRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        remark:
+          type: string
+          minLength: 0
+          maxLength: 1000
+          nullable: true
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - expectedVersion
+      description: 至少一个业务字段；未传不修改，remark=null清空，displayName=null非法。
+    ExpectedVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - expectedVersion
+    ReasonVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          $ref: '#/components/schemas/Reason'
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - reason
+      - expectedVersion
+    ValidityRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        validFrom:
+          $ref: '#/components/schemas/UtcInstant'
+        validUntil:
+          $ref: '#/components/schemas/UtcInstant'
+        reason:
+          $ref: '#/components/schemas/Reason'
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - validFrom
+      - validUntil
+      - reason
+      - expectedVersion
+      description: validFrom严格小于validUntil；缩短含生效推迟需确认并撤销全部旧会话。
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        temporaryPassword:
+          $ref: '#/components/schemas/Password'
+        reason:
+          $ref: '#/components/schemas/Reason'
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - reason
+      - expectedVersion
+    CustomerMutation:
+      type: object
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/Customer'
+        denialReasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/DenialReason'
+        revokedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - user
+      - denialReasons
+      - revokedSessionCount
+      - cacheSyncStatus
+    CustomerSecret:
+      type: object
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/Customer'
+        temporaryPassword:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: 仅本次已提交结果展示，关闭即清除；禁止复制到缓存、日志或审计。
+        secretAvailable:
+          type: boolean
+          enum:
+          - true
+        revokedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - user
+      - temporaryPassword
+      - secretAvailable
+      - revokedSessionCount
+      - cacheSyncStatus
+    SecretUnavailable:
+      type: object
+      additionalProperties: false
+      properties:
+        committed:
+          type: boolean
+          enum:
+          - true
+        resourceId:
+          $ref: '#/components/schemas/Id'
+        secretAvailable:
+          type: boolean
+          enum:
+          - false
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - committed
+      - resourceId
+      - secretAvailable
+      - cacheSyncStatus
+      description: 幂等重放不返回密码；响应丢失后需另发重置请求。
+    CustomerSecretResult:
+      oneOf:
+      - $ref: '#/components/schemas/CustomerSecret'
+      - $ref: '#/components/schemas/SecretUnavailable'
+    Session:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        accountId:
+          $ref: '#/components/schemas/Id'
+        username:
+          $ref: '#/components/schemas/Username'
+        deviceName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          nullable: true
+        os:
+          type: string
+          enum:
+          - MACOS
+          - WINDOWS
+        clientVersion:
+          type: string
+          minLength: 1
+          maxLength: 40
+        purpose:
+          $ref: '#/components/schemas/Purpose'
+        authenticatedAt:
+          $ref: '#/components/schemas/UtcInstant'
+        lastValidatedAt:
+          type: string
+          format: date-time
+          pattern: Z$
+          nullable: true
+        expiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+        status:
+          type: string
+          enum:
+          - VALID
+          - EXPIRED
+          - REVOKED
+        recentOnline:
+          type: boolean
+        accountQualified:
+          type: boolean
+        revokedAt:
+          type: string
+          format: date-time
+          pattern: Z$
+          nullable: true
+        revokedReason:
+          type: string
+          minLength: 1
+          maxLength: 40
+          nullable: true
+      required:
+      - id
+      - accountId
+      - username
+      - deviceName
+      - os
+      - clientVersion
+      - purpose
+      - authenticatedAt
+      - lastValidatedAt
+      - expiresAt
+      - status
+      - recentOnline
+      - accountQualified
+      - revokedAt
+      - revokedReason
+    SessionRevocation:
+      type: object
+      additionalProperties: false
+      properties:
+        accountId:
+          $ref: '#/components/schemas/Id'
+        accountVersion:
+          $ref: '#/components/schemas/Version'
+        sessionId:
+          $ref: '#/components/schemas/Id'
+        sessionStatus:
+          type: string
+          enum:
+          - REVOKED
+        revokedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - accountId
+      - accountVersion
+      - revokedSessionCount
+      - cacheSyncStatus
+    Overview:
+      type: object
+      additionalProperties: false
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        activeInTerm:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        frozen:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        disabled:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        expired:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        expiringWithin7Days:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        recentOnline:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        recentLoginFailures:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        asOf:
+          $ref: '#/components/schemas/UtcInstant'
+        definitions:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - total
+      - activeInTerm
+      - frozen
+      - disabled
+      - expired
+      - expiringWithin7Days
+      - recentOnline
+      - recentLoginFailures
+      - asOf
+      - definitions
+      description: 计数有交集；在线=未撤销未过期NORMAL且10分钟内成功校验，不等于正在操作。
+    AuditBusinessValues:
+      type: object
+      additionalProperties: false
+      properties: &id003
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - FROZEN
+          - DISABLED
+        validFrom:
+          $ref: '#/components/schemas/UtcInstant'
+        validUntil:
+          $ref: '#/components/schemas/UtcInstant'
+        version:
+          $ref: '#/components/schemas/Version'
+        clientMaxHours:
+          type: integer
+          minimum: 1
+          maximum: 24
+        role:
+          $ref: '#/components/schemas/AdminRole'
+        revokedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        mustChangePassword:
+          type: boolean
+      description: 前后值白名单；禁止密码、令牌、摘要、CSRF、来源路径。
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        actorType:
+          type: string
+          enum:
+          - ADMIN
+          - SYSTEM
+        actorId:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+          nullable: true
+        actorNameSnapshot:
+          type: string
+          minLength: 1
+          maxLength: 64
+        targetType:
+          type: string
+          minLength: 1
+          maxLength: 40
+        targetId:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+          nullable: true
+        action:
+          type: string
+          minLength: 1
+          maxLength: 64
+        beforeValues:
+          type: object
+          additionalProperties: false
+          properties: *id003
+          description: 前后值白名单；禁止密码、令牌、摘要、CSRF、来源路径。
+          nullable: true
+        afterValues:
+          type: object
+          additionalProperties: false
+          properties: *id003
+          description: 前后值白名单；禁止密码、令牌、摘要、CSRF、来源路径。
+          nullable: true
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          nullable: true
+        result:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+        errorCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          nullable: true
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        occurredAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - id
+      - actorType
+      - actorId
+      - actorNameSnapshot
+      - targetType
+      - targetId
+      - action
+      - beforeValues
+      - afterValues
+      - reason
+      - result
+      - errorCode
+      - requestId
+      - occurredAt
+    LoginEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        identityType:
+          type: string
+          enum:
+          - CUSTOMER
+          - ADMIN
+        accountId:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+          nullable: true
+        eventType:
+          type: string
+          minLength: 1
+          maxLength: 40
+        result:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+          - THROTTLED
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sourceLabel:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 已屏蔽的来源标识，不返回摘要。
+          nullable: true
+        clientVersion:
+          type: string
+          minLength: 1
+          maxLength: 40
+          nullable: true
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        occurredAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - id
+      - identityType
+      - accountId
+      - eventType
+      - result
+      - code
+      - sourceLabel
+      - clientVersion
+      - requestId
+      - occurredAt
+    LoginThrottle:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        realm:
+          type: string
+          enum:
+          - CUSTOMER
+          - ADMIN
+        dimension:
+          type: string
+          enum:
+          - ACCOUNT
+          - SOURCE
+        maskedIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 100
+        failureCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        windowStartedAt:
+          $ref: '#/components/schemas/UtcInstant'
+        blockedUntil:
+          type: string
+          format: date-time
+          pattern: Z$
+          nullable: true
+        version:
+          $ref: '#/components/schemas/Version'
+      required:
+      - id
+      - realm
+      - dimension
+      - maskedIdentifier
+      - failureCount
+      - windowStartedAt
+      - blockedUntil
+      - version
+    ThrottleMutation:
+      type: object
+      additionalProperties: false
+      properties:
+        throttle:
+          $ref: '#/components/schemas/LoginThrottle'
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - throttle
+      - cacheSyncStatus
+    Administrator:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        role:
+          $ref: '#/components/schemas/AdminRole'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DISABLED
+        mustChangePassword:
+          type: boolean
+        version:
+          $ref: '#/components/schemas/Version'
+        createdAt:
+          $ref: '#/components/schemas/UtcInstant'
+        updatedAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - id
+      - username
+      - displayName
+      - role
+      - status
+      - mustChangePassword
+      - version
+      - createdAt
+      - updatedAt
+    CreateAdministratorRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        username:
+          $ref: '#/components/schemas/Username'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        temporaryPassword:
+          $ref: '#/components/schemas/Password'
+      required:
+      - username
+      - displayName
+      description: 后台创建固定OPERATOR，禁止提交role。
+    UpdateAdministratorRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - displayName
+      - expectedVersion
+    AdministratorMutation:
+      type: object
+      additionalProperties: false
+      properties:
+        administrator:
+          $ref: '#/components/schemas/Administrator'
+        revokedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - administrator
+      - revokedSessionCount
+      - cacheSyncStatus
+    AdministratorSecret:
+      type: object
+      additionalProperties: false
+      properties:
+        administrator:
+          $ref: '#/components/schemas/Administrator'
+        temporaryPassword:
+          type: string
+          minLength: 12
+          maxLength: 128
+        secretAvailable:
+          type: boolean
+          enum:
+          - true
+        revokedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - administrator
+      - temporaryPassword
+      - secretAvailable
+      - revokedSessionCount
+      - cacheSyncStatus
+    AdministratorSecretResult:
+      oneOf:
+      - $ref: '#/components/schemas/AdministratorSecret'
+      - $ref: '#/components/schemas/SecretUnavailable'
+    LoginPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        clientMaxHours:
+          type: integer
+          minimum: 1
+          maximum: 24
+        nextValidationAfterSeconds:
+          type: integer
+          enum:
+          - 300
+        networkWindowSeconds:
+          type: integer
+          enum:
+          - 600
+        version:
+          $ref: '#/components/schemas/Version'
+        updatedBy:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+          nullable: true
+        updatedAt:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - clientMaxHours
+      - nextValidationAfterSeconds
+      - networkWindowSeconds
+      - version
+      - updatedBy
+      - updatedAt
+    UpdatePolicyRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        clientMaxHours:
+          type: integer
+          minimum: 1
+          maximum: 24
+        reason:
+          $ref: '#/components/schemas/Reason'
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - clientMaxHours
+      - reason
+      - expectedVersion
+    PolicyMutation:
+      type: object
+      additionalProperties: false
+      properties:
+        policy:
+          $ref: '#/components/schemas/LoginPolicy'
+        affectedSessionCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        cacheSyncStatus:
+          $ref: '#/components/schemas/CacheSyncStatus'
+      required:
+      - policy
+      - affectedSessionCount
+      - cacheSyncStatus
+    CustomerPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        page:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        pageSize:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 50
+          - 100
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    SessionPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        page:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        pageSize:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 50
+          - 100
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    AuditEventPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        page:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        pageSize:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 50
+          - 100
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    LoginEventPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoginEvent'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        page:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        pageSize:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 50
+          - 100
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    LoginThrottlePage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoginThrottle'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        page:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        pageSize:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 50
+          - 100
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    AdministratorPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Administrator'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        page:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        pageSize:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 50
+          - 100
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    ClientLoginResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ClientLoginResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ClientFirstPasswordResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginNext'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ClientValidateResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Qualification'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ClientAccountResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Qualification'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ClientPasswordResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginNext'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ClientLogoutResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LogoutResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminCsrfResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CsrfToken'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminLoginResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminLoginResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminFirstPasswordResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginNext'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminMeResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminSummary'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminActivityResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ActivityResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminPasswordResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginNext'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    AdminLogoutResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LogoutResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    OverviewResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Overview'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ListCustomersResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerPage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    CreateCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerSecretResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    GetCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerDetail'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    UpdateCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    FreezeCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    UnfreezeCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    DisableCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    EnableCustomerResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    UpdateCustomerValidityResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ResetCustomerPasswordResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerSecretResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ListCustomerSessionsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionPage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    RevokeCustomerSessionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionRevocation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    RevokeCustomerSessionsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionRevocation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    CustomerAuditEventsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AuditEventPage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ListAuditEventsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AuditEventPage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ListLoginEventsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginEventPage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ListLoginThrottlesResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginThrottlePage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ReleaseLoginThrottleResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ThrottleMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ListAdministratorsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministratorPage'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    CreateAdministratorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministratorSecretResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    UpdateAdministratorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministratorMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    DisableAdministratorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministratorMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    EnableAdministratorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministratorMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ResetAdministratorPasswordResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministratorSecretResult'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    GetPolicyResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginPolicy'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    UpdatePolicyResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/PolicyMutation'
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - data
+      - requestId
+      - serverNow
+    ErrorCode400:
+      type: string
+      enum:
+      - VALIDATION_ERROR
+      - PROTOCOL_INVALID
+    Error400:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode400'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode401:
+      type: string
+      enum:
+      - INVALID_CREDENTIALS
+      - SESSION_EXPIRED
+      - SESSION_REVOKED
+      - PASSWORD_CHANGE_TOKEN_INVALID
+      - SESSION_INVALID
+    Error401:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode401'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode403:
+      type: string
+      enum:
+      - ACCOUNT_FROZEN
+      - ACCOUNT_DISABLED
+      - ACCOUNT_NOT_STARTED
+      - ACCOUNT_EXPIRED
+      - PASSWORD_CHANGE_REQUIRED
+      - FORBIDDEN
+      - CSRF_INVALID
+    Error403:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode403'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode404:
+      type: string
+      enum:
+      - RESOURCE_NOT_FOUND
+    Error404:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode404'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode409:
+      type: string
+      enum:
+      - VERSION_CONFLICT
+      - USERNAME_EXISTS
+      - INVALID_STATE_TRANSITION
+      - LAST_SUPER_ADMIN
+      - IDEMPOTENCY_CONFLICT
+    Error409:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode409'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode426:
+      type: string
+      enum:
+      - CLIENT_UPDATE_REQUIRED
+      - PROTOCOL_UNSUPPORTED
+    Error426:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode426'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode429:
+      type: string
+      enum:
+      - LOGIN_RATE_LIMITED
+    Error429:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode429'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    ErrorCode503:
+      type: string
+      enum:
+      - SERVICE_UNAVAILABLE
+      - MAINTENANCE
+    Error503:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode503'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+            details:
+              $ref: '#/components/schemas/ErrorDetails'
+          required:
+          - code
+          - message
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+      required:
+      - error
+      - requestId
+      - serverNow
+    DenialReason:
+      type: string
+      enum:
+      - ACCOUNT_DISABLED
+      - ACCOUNT_FROZEN
+      - ACCOUNT_NOT_STARTED
+      - ACCOUNT_EXPIRED
+x-phase: P2 contract only
+x-permission-semantics: x-permissions为可适用权限集合；多域查询按记录域选择相应权限，不要求运营拥有管理员权限，也不能通过OR检查越域。
+x-jwt-contract:
+  algorithm: RS256
+  issuer: urn:ticket-shop-admin:{environment}
+  clientAudience: ticket-shop-client
+  adminAudience: ticket-shop-admin
+  claims:
+  - iss
+  - aud
+  - sub
+  - sid
+  - jti
+  - purpose
+  - principalType
+  - iat
+  - exp
+  randomIdBytes: 32
+  expiryRounding: floor seconds; no expiration grace or sliding refresh
+  redisKey: ticket-shop-admin:{environment}:session:{principalType}:{sid}

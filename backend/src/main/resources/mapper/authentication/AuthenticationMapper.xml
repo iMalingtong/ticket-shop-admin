@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ticketshop.admin.authentication.infrastructure.AuthenticationMapper">
+  <sql id="accountTable"><choose><when test="realm.name() == 'ADMIN'">admin_account</when><otherwise>customer_account</otherwise></choose></sql>
+  <sql id="sessionTable"><choose><when test="realm.name() == 'ADMIN'">admin_session</when><otherwise>customer_session</otherwise></choose></sql>
+  <sql id="owner"><choose><when test="realm.name() == 'ADMIN'">admin_id</when><otherwise>account_id</otherwise></choose></sql>
+  <select id="sessionIds" resultType="string">SELECT sid FROM <include refid="sessionTable"/> WHERE <include refid="owner"/>=#{id}</select>
+  <select id="account" resultType="map">SELECT * FROM <include refid="accountTable"/> WHERE <choose><when test="id != null">id=#{id}</when><otherwise>username_key=#{key}</otherwise></choose> FOR UPDATE</select>
+  <select id="session" resultType="map">SELECT * FROM <include refid="sessionTable"/> WHERE sid=#{sid} FOR UPDATE</select>
+  <insert id="insertSession">
+    INSERT INTO <include refid="sessionTable"/>(id,<include refid="owner"/>,sid,jti,token_hash,version,purpose,authenticated_at,expires_at,created_at,
+    <choose><when test="realm.name() == 'ADMIN'">csrf_hash,last_activity_at</when><otherwise>policy_version,device_name,os,client_version,protocol_version</otherwise></choose>)
+    VALUES(#{v.id},#{v.owner},#{v.sid},#{v.jti},#{v.token_hash},0,#{v.purpose},#{v.authenticated_at},#{v.expires_at},#{v.authenticated_at},
+    <choose><when test="realm.name() == 'ADMIN'">#{v.csrf_hash},#{v.authenticated_at}</when><otherwise>#{v.policy_version},#{v.device_name},#{v.os},#{v.client_version},#{v.protocol_version}</otherwise></choose>)
+  </insert>
+  <update id="changePassword">UPDATE <include refid="accountTable"/> SET password_hash=#{hash},password_version=password_version+1,must_change_password=FALSE,version=version+1,updated_at=#{now} WHERE id=#{id}</update>
+  <update id="revoke">UPDATE <include refid="sessionTable"/> SET revoked_at=#{now},revoked_reason=#{reason},version=version+1 WHERE <include refid="owner"/>=#{id} AND revoked_at IS NULL <if test="sid != null">AND sid=#{sid}</if></update>
+</mapper>

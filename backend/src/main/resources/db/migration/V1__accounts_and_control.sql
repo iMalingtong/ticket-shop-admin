@@ -1,0 +1,80 @@
+-- UTC语义；只通过Flyway执行。已发布迁移不得修改。
+
+CREATE TABLE admin_account (
+  id BIGINT UNSIGNED NOT NULL COMMENT '主键（正数且不超过Java Long上限）',
+  username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '登录名（保留大小写）',
+  username_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '规范化小写唯一登录名',
+  display_name VARCHAR(64) NOT NULL COMMENT '显示名称',
+  password_hash VARCHAR(512) NOT NULL COMMENT '带算法标识的密码摘要',
+  password_version BIGINT NOT NULL DEFAULT 0 COMMENT '密码摘要版本',
+  role VARCHAR(24) NOT NULL COMMENT '静态管理员角色',
+  status VARCHAR(16) NOT NULL COMMENT '管理员状态',
+  must_change_password BOOLEAN NOT NULL DEFAULT TRUE COMMENT '必须首次改密',
+  version BIGINT NOT NULL DEFAULT 0 COMMENT '并发版本号',
+  created_by BIGINT UNSIGNED NULL COMMENT '创建管理员（离线引导可空）',
+  updated_by BIGINT UNSIGNED NULL COMMENT '更新管理员（离线引导可空）',
+  created_at DATETIME(6) NOT NULL COMMENT '创建时刻UTC',
+  updated_at DATETIME(6) NOT NULL COMMENT '更新时刻UTC',
+  PRIMARY KEY (id),
+  CONSTRAINT ck_admin_account_id CHECK (id BETWEEN 1 AND 9223372036854775807),
+  UNIQUE KEY uk_admin_username (username_key),
+  CONSTRAINT ck_admin_username CHECK (username REGEXP '^[A-Za-z0-9._-]{3,64}$' AND username_key = LOWER(username)),
+  CONSTRAINT ck_admin_display CHECK (CHAR_LENGTH(display_name) BETWEEN 1 AND 64),
+  CONSTRAINT ck_admin_versions CHECK (version >= 0 AND password_version >= 0),
+  CONSTRAINT ck_admin_must_change CHECK (must_change_password IN (0,1)),
+  CONSTRAINT ck_admin_role CHECK (role IN ('SUPER_ADMIN','OPERATOR')),
+  CONSTRAINT ck_admin_status CHECK (status IN ('ACTIVE','DISABLED')),
+  KEY ix_admin_role_status (role,status,id),
+  CONSTRAINT fk_admin_created_by FOREIGN KEY (created_by) REFERENCES admin_account(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_admin_updated_by FOREIGN KEY (updated_by) REFERENCES admin_account(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='管理员账号';
+
+CREATE TABLE customer_account (
+  id BIGINT UNSIGNED NOT NULL COMMENT '主键（正数且不超过Java Long上限）',
+  username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '登录名（保留大小写）',
+  username_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '规范化小写唯一登录名',
+  display_name VARCHAR(64) NOT NULL COMMENT '显示名称',
+  password_hash VARCHAR(512) NOT NULL COMMENT '带算法标识的密码摘要',
+  password_version BIGINT NOT NULL DEFAULT 0 COMMENT '密码摘要版本',
+  status VARCHAR(16) NOT NULL COMMENT '账号状态（期限状态另行计算）',
+  valid_from DATETIME(6) NOT NULL COMMENT '生效时刻（包含）UTC',
+  valid_until DATETIME(6) NOT NULL COMMENT '到期时刻（不包含）UTC',
+  must_change_password BOOLEAN NOT NULL DEFAULT TRUE COMMENT '必须首次改密',
+  remark VARCHAR(1000) NULL COMMENT '备注',
+  last_login_at DATETIME(6) NULL COMMENT '最近正常登录时刻UTC',
+  last_validated_at DATETIME(6) NULL COMMENT '最近成功资格校验时刻UTC',
+  version BIGINT NOT NULL DEFAULT 0 COMMENT '并发版本号',
+  created_by BIGINT UNSIGNED NOT NULL COMMENT '创建管理员',
+  updated_by BIGINT UNSIGNED NOT NULL COMMENT '更新管理员',
+  created_at DATETIME(6) NOT NULL COMMENT '创建时刻UTC',
+  updated_at DATETIME(6) NOT NULL COMMENT '更新时刻UTC',
+  PRIMARY KEY (id),
+  CONSTRAINT ck_customer_account_id CHECK (id BETWEEN 1 AND 9223372036854775807),
+  UNIQUE KEY uk_customer_username (username_key),
+  CONSTRAINT ck_customer_username CHECK (username REGEXP '^[A-Za-z0-9._-]{3,64}$' AND username_key = LOWER(username)),
+  CONSTRAINT ck_customer_display CHECK (CHAR_LENGTH(display_name) BETWEEN 1 AND 64),
+  CONSTRAINT ck_customer_versions CHECK (version >= 0 AND password_version >= 0),
+  CONSTRAINT ck_customer_must_change CHECK (must_change_password IN (0,1)),
+  CONSTRAINT ck_customer_status CHECK (status IN ('ACTIVE','FROZEN','DISABLED')),
+  CONSTRAINT ck_customer_validity CHECK (valid_from < valid_until),
+  KEY ix_customer_status_until (status,valid_until,id),
+  KEY ix_customer_until (valid_until,id),
+  KEY ix_customer_login (last_login_at,id),
+  KEY ix_customer_created (created_at,id),
+  CONSTRAINT fk_customer_created_by FOREIGN KEY (created_by) REFERENCES admin_account(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_customer_updated_by FOREIGN KEY (updated_by) REFERENCES admin_account(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='客户账号';
+
+CREATE TABLE platform_control (
+  id BIGINT UNSIGNED NOT NULL COMMENT '主键（正数且不超过Java Long上限）',
+  initialized BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已完成一次性引导',
+  recovery_mode BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否处于恢复维护状态',
+  version BIGINT NOT NULL DEFAULT 0 COMMENT '并发版本号',
+  updated_at DATETIME(6) NOT NULL COMMENT '更新时刻UTC',
+  PRIMARY KEY (id),
+  CONSTRAINT ck_platform_control_id CHECK (id BETWEEN 1 AND 9223372036854775807),
+  CONSTRAINT ck_control_singleton CHECK (id = 1),
+  CONSTRAINT ck_control_flags CHECK (initialized IN (0,1) AND recovery_mode IN (0,1) AND version >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平台引导与恢复控制单例';
+
+INSERT INTO platform_control (id,initialized,recovery_mode,version,updated_at) VALUES (1,FALSE,FALSE,0,UTC_TIMESTAMP(6));

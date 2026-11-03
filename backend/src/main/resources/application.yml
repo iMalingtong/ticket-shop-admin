@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: ticket-shop-admin
+  datasource:
+    url: ${TICKET_SHOP_DB_URL}
+    username: ${TICKET_SHOP_DB_USERNAME}
+    password: ${TICKET_SHOP_DB_PASSWORD}
+    hikari:
+      connection-init-sql: "SET time_zone = '+00:00'"
+      data-source-properties:
+        connectTimeout: 2000
+        socketTimeout: 2000
+      connection-timeout: 2000
+      validation-timeout: 1000
+      maximum-pool-size: 10
+  data:
+    redis:
+      host: ${TICKET_SHOP_REDIS_HOST}
+      port: ${TICKET_SHOP_REDIS_PORT}
+      database: ${TICKET_SHOP_REDIS_DATABASE:0}
+      username: ${TICKET_SHOP_REDIS_USERNAME:}
+      password: ${TICKET_SHOP_REDIS_PASSWORD:}
+      connect-timeout: 2s
+      timeout: 2s
+  flyway:
+    # HTTP runtime only validates. Use the explicit --migrate entry point with separate credentials.
+    enabled: false
+  jackson:
+    time-zone: UTC
+    deserialization:
+      fail-on-unknown-properties: true
+    serialization:
+      write-dates-as-timestamps: false
+server:
+  address: 127.0.0.1
+  port: ${TICKET_SHOP_SERVER_PORT:18080}
+  tomcat:
+    connection-timeout: 2s
+    max-http-form-post-size: 16KB
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis
+mybatis-plus:
+  type-handlers-package: com.ticketshop.admin.common.infrastructure
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+ticket-shop:
+  auth:
+    private-key: ${TICKET_SHOP_JWT_PRIVATE_KEY:}
+    public-key: ${TICKET_SHOP_JWT_PUBLIC_KEY:}
+    hmac-key: ${TICKET_SHOP_HMAC_KEY:}
+    key-id: ${TICKET_SHOP_JWT_KEY_ID:development-1}
+    allowed-origins: ${TICKET_SHOP_ALLOWED_ORIGINS:http://127.0.0.1:8848,http://localhost:8848}
+    minimum-client-version: ${TICKET_SHOP_MINIMUM_CLIENT_VERSION:}
+  # Redis prefix is derived from the one validated active runtime profile.
+logging:
+  level:
+    org.springframework.security: WARN

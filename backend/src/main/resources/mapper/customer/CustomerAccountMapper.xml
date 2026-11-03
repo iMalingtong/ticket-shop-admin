@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ticketshop.admin.customer.infrastructure.CustomerAccountMapper">
+  <select id="lockById" resultType="com.ticketshop.admin.customer.infrastructure.CustomerAccountEntity">
+    SELECT * FROM customer_account WHERE id = #{id} FOR UPDATE
+  </select>
+  <select id="search" resultType="com.ticketshop.admin.customer.infrastructure.CustomerAccountEntity">
+    SELECT * FROM customer_account
+    <where>
+      <if test="filter.keyword != null and filter.keyword != ''">
+        AND (LOCATE(#{filter.keyword},username) > 0 OR LOCATE(#{filter.keyword},display_name) > 0)
+      </if>
+      <if test="filter.status != null">AND status = #{filter.status}</if>
+      <if test="filter.validUntilFrom != null">AND valid_until &gt;= #{filter.validUntilFrom}</if>
+      <if test="filter.validUntilTo != null">AND valid_until &lt; #{filter.validUntilTo}</if>
+      <choose>
+        <when test="filter.termStatus == 'NOT_STARTED'">AND valid_from &gt; #{filter.now}</when>
+        <when test="filter.termStatus == 'IN_TERM'">AND valid_from &lt;= #{filter.now} AND valid_until &gt; #{filter.now}</when>
+        <when test="filter.termStatus == 'EXPIRED'">AND valid_until &lt;= #{filter.now}</when>
+      </choose>
+    </where>
+    ORDER BY
+    <choose>
+      <when test="filter.sort.name() == 'VALID_UNTIL_ASC'">valid_until ASC, id ASC</when>
+      <when test="filter.sort.name() == 'VALID_UNTIL_DESC'">valid_until DESC, id DESC</when>
+      <when test="filter.sort.name() == 'LAST_LOGIN_AT_ASC'">(last_login_at IS NULL) ASC, last_login_at ASC, id ASC</when>
+      <when test="filter.sort.name() == 'LAST_LOGIN_AT_DESC'">(last_login_at IS NULL) ASC, last_login_at DESC, id DESC</when>
+      <when test="filter.sort.name() == 'CREATED_AT_ASC'">created_at ASC, id ASC</when>
+      <otherwise>created_at DESC, id DESC</otherwise>
+    </choose>
+  </select>
+  <update id="updateProfile">
+    UPDATE customer_account
+    <set>
+      <if test="displayName != null">display_name = #{displayName},</if>
+      <if test="remarkPresent">remark = #{remark},</if>
+      updated_by = #{actorId}, updated_at = #{now}, version = version + 1
+    </set>
+    WHERE id = #{id} AND version = #{expectedVersion}
+  </update>
+  <update id="updateStatus">
+    UPDATE customer_account SET status = #{to}, updated_by = #{actorId}, updated_at = #{now}, version = version + 1
+    WHERE id = #{id} AND status = #{from} AND version = #{expectedVersion}
+  </update>
+  <update id="updateValidity">
+    UPDATE customer_account SET valid_from = #{validFrom}, valid_until = #{validUntil}, updated_by = #{actorId}, updated_at = #{now}, version = version + 1
+    WHERE id = #{id} AND version = #{expectedVersion}
+  </update>
+</mapper>
